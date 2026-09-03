@@ -21,12 +21,20 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install build wheel setuptools
 
-      - name: Build wheel
+      - name: Build Python wheel
+        working-directory: python
         run: |
           python -m build --wheel
+
+      - name: Test wheel
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem "python/dist/*.whl" | Select-Object -First 1
+          python -m pip install $wheel.FullName
+          python -c "import meshoptimizer; print('meshoptimizer import OK')"
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
           name: meshoptimizer-windows-python-wheel
-          path: dist/*.whl
+          path: python/dist/*.whl
