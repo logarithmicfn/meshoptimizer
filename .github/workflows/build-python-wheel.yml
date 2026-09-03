@@ -13,11 +13,27 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Download meshoptimizer source
+      - name: Upgrade pip
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
+
+      - name: Install binary build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --only-binary=:all: `
+            numpy `
+            cython `
+            meson-python `
+            setuptools `
+            wheel `
+            build
+
+      - name: Download meshoptimizer source
+        shell: pwsh
+        run: |
           New-Item -ItemType Directory -Force source | Out-Null
+
           python -m pip download `
             --no-binary=:all: `
             --no-deps `
@@ -29,53 +45,56 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force package | Out-Null
 
-          $archive = Get-ChildItem "source\meshoptimizer-*.tar.gz" | Select-Object -First 1
+          $archive = Get-ChildItem "source\meshoptimizer-*.tar.gz" |
+            Select-Object -First 1
 
           if (-not $archive) {
             throw "meshoptimizer source archive was not downloaded."
           }
 
-          Write-Host "Extracting $($archive.FullName)"
           tar -xzf $archive.FullName -C package
 
-          Write-Host "Extracted files:"
-          Get-ChildItem package
-
-      - name: Install build tools
-        shell: pwsh
-        run: |
-          python -m pip install --upgrade build wheel setuptools numpy
-
-      - name: Build wheel
-        shell: pwsh
-        run: |
-          $src = Get-ChildItem "package" -Directory | Select-Object -First 1
+          $src = Get-ChildItem package -Directory |
+            Select-Object -First 1
 
           if (-not $src) {
-            throw "Could not find extracted meshoptimizer source directory."
+            throw "Could not find extracted source directory."
           }
 
-          Write-Host "Building from $($src.FullName)"
+          Write-Host "Source directory: $($src.FullName)"
+
+      - name: Build wheel without isolation
+        shell: pwsh
+        run: |
+          $src = Get-ChildItem package -Directory |
+            Select-Object -First 1
+
+          New-Item -ItemType Directory -Force dist | Out-Null
 
           python -m build `
             --wheel `
+            --no-isolation `
             --outdir dist `
-            $src.FullName
+            "$($src.FullName)"
 
       - name: Test wheel
         shell: pwsh
         run: |
-          $wheel = Get-ChildItem "dist\*.whl" | Select-Object -First 1
+          $wheel = Get-ChildItem "dist\*.whl" |
+            Select-Object -First 1
 
           if (-not $wheel) {
             throw "No wheel was produced."
           }
 
-          Write-Host "Testing $($wheel.FullName)"
+          Write-Host "Testing: $($wheel.FullName)"
 
-          python -m pip install --force-reinstall --no-deps $wheel.FullName
+          python -m pip install `
+            --force-reinstall `
+            --no-deps `
+            $wheel.FullName
 
-          python -c "import meshoptimizer; print('Import successful:', meshoptimizer.__file__)"
+          python -c "import meshoptimizer; print('meshoptimizer import OK:', meshoptimizer.__file__)"
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
